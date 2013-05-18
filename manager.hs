@@ -19,7 +19,8 @@ data FeedBot = FeedBot {
   ircChannel :: String,
   ircUser :: String,
   feedUrl :: String,
-  feedSpan :: Integer
+  feedSpan :: Integer,
+  processId :: ProcessID
 } deriving (Show)
 
 parseFeedBotsFromFile :: String -> IO [FeedBot]
@@ -31,10 +32,10 @@ parseFeedBotsFromFile path = do
       Right csv -> convertTokenToFeedBots csv
       
 convertTokenToFeedBots :: [[String]] -> [FeedBot]
-convertTokenToFeedBots = map convertTokenToFeedBot . filter (\x -> length x == 7)
+convertTokenToFeedBots = map convertTokenToFeedBot . filter (\x -> length x == 8)
 
 convertTokenToFeedBot :: [String] -> FeedBot
-convertTokenToFeedBot [n,se,p,c,us,ur,sp] = 
+convertTokenToFeedBot [n,se,p,c,us,ur,sp,pid] = 
   FeedBot {
      botId = (read n) :: Integer,
      ircServer = se,
@@ -42,7 +43,8 @@ convertTokenToFeedBot [n,se,p,c,us,ur,sp] =
      ircChannel = c,
      ircUser = us,
      feedUrl = ur,
-     feedSpan = (read sp) :: Integer
+     feedSpan = (read sp) :: Integer,
+     processId = (read pid) :: ProcessID
      }
 
 convertTokenToFeedBot x =
@@ -62,7 +64,8 @@ tableHeader =
     "IRC Channel",
     "IRC User",
     "Feed URL",
-    "Span"
+    "Span",
+    "PID"
     ]) ++ "</tr>\n"
 
 convertFeedBotToHtml :: FeedBot -> String
@@ -73,8 +76,9 @@ convertFeedBotToHtml FeedBot {
   ircChannel=c,
   ircUser=iu,
   feedUrl=fu,
-  feedSpan=fs
-  } = concat $ map (\x -> "<td>" ++ x ++ "</td>") [(show n),is,(show p),c,iu,fu,(show fs)]
+  feedSpan=fs,
+  processId=pid
+  } = concat $ map (\x -> "<td>" ++ x ++ "</td>") [(show n),is,(show p),c,iu,fu,(show fs),(show pid)]
 
 createBot :: String->Integer->String->String->String->Integer -> IO ()
 createBot server port channel user url span = do
@@ -86,7 +90,8 @@ createBot server port channel user url span = do
             ircChannel = channel,
             ircUser = user,
             feedUrl = url,
-            feedSpan = span
+            feedSpan = span,
+            processId = 0
             }
   saveFeedBotsToFile "bots-new.csv" (bots ++ [bot])
   removeFile "bots.csv"
@@ -107,19 +112,41 @@ convertFeedBotToList bot =
     ircChannel bot,
     ircUser bot,
     feedUrl bot,
-    show (feedSpan bot)
+    show (feedSpan bot),
+    show (processId bot)
   ]
 
-executeFeedBot :: (Integral n) => n -> IO ProcessID
+executeFeedBot :: (Integral n) => n -> IO ()
 executeFeedBot n = do
   bots <- parseFeedBotsFromFile "bots.csv"
-  forkFeedBot (bots `genericIndex` (n-1))
+  putStrLn $ "bots:" ++ (show bots)
+  pid <- forkFeedBot (bots `genericIndex` (n-1))
+  let bot = bots `genericIndex` (n-1)
+    in saveFeedBotsToFile "bots-new.csv" (
+    replaceFeedBot bots (n-1) FeedBot {
+       botId = (botId bot),
+       ircServer = (ircServer bot),
+       ircPort = (ircPort bot),
+       ircChannel = (ircChannel bot),
+       ircUser = (ircUser bot),
+       feedUrl = (feedUrl bot),
+       feedSpan = (feedSpan bot),
+       processId = pid
+      }
+    )
+  removeFile "bots.csv"
+  renameFile "bots-new.csv" "bots.csv"
+
+replaceFeedBot :: (Integral n) => [FeedBot] -> n -> FeedBot -> [FeedBot]
+
+replaceFeedBot (x:xs) 0 newBot = newBot:xs
+replaceFeedBot [] n newBot = []
+replaceFeedBot (x:xs) n newBot = x:(replaceFeedBot xs (n-1) newBot)
   
-          
+
 forkFeedBot :: FeedBot -> IO ProcessID
 forkFeedBot bot =
-  forkProcess $ executeFile "runghc" True [
-    "feedbot.hs",
+  forkProcess $ executeFile "./feedbot" True [
     "--irc-server", (ircServer bot),
     "--port", (show (ircPort bot)),
     "--channel", (ircChannel bot),
@@ -132,14 +159,31 @@ forkFeedBot bot =
   where
     user = ircUser bot
 
--- terminateFeedBot :: (Integral n) => n -> IO ()
--- terminateFeedBot n = do
---   bots <- parseFeedBotsFromFile "bots.csv"
---   killFeedBot (bots `genericIndex` (n-1))
+terminateFeedBot :: (Integral n) => n -> IO ()
+terminateFeedBot n = do
+  bots <- parseFeedBotsFromFile "bots.csv"
+  putStrLn $ "bots:" ++ (show bots)
+  killFeedBot (bots `genericIndex` (n-1))
+  let bot = (bots `genericIndex` (n-1))
+  let newBots = replaceFeedBot bots (n-1) FeedBot {
+            botId = (botId bot),
+            ircServer = (ircServer bot),
+            ircPort = (ircPort bot),
+            ircChannel = (ircChannel bot),
+            ircUser = (ircUser bot),
+            feedUrl = (feedUrl bot),
+            feedSpan = (feedSpan bot),
+            processId = 0 :: ProcessID
+        }
+  saveFeedBotsToFile "bots-new.csv" newBots
+  removeFile "bots.csv"
+  renameFile "bots-new.csv" "bots.csv"  
 
--- killFeedBot :: FeedBot -> IO ()
--- killFeedBot bot
---   runCommand
+killFeedBot :: FeedBot -> IO ()
+killFeedBot bot = do
+  pid <- forkProcess $ executeFile "kill" True [show (processId bot)] Nothing
+  return ()
+
 
 main = scotty 3000 $ do
   get "/bots" $ do
@@ -195,5 +239,6 @@ main = scotty 3000 $ do
     redirect "/bots"
 
   post "/bots/:id/terminate" $ do
---    liftIO $ terminateFeedBot (read id)
+    id <- param "id"
+    liftIO $ terminateFeedBot (read id)
     redirect "/bots"
