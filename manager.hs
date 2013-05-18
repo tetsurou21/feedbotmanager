@@ -7,7 +7,8 @@ import Control.Monad.IO.Class
 import Text.CSV
 import Data.List
 import System.Directory
-import System.Process
+import System.Posix.Process
+import System.Posix.Types
 import Text.Printf
 
 
@@ -109,17 +110,37 @@ convertFeedBotToList bot =
     show (feedSpan bot)
   ]
 
-executeFeedBot :: (Integral n) => n -> IO ProcessHandle
+executeFeedBot :: (Integral n) => n -> IO ProcessID
 executeFeedBot n = do
   bots <- parseFeedBotsFromFile "bots.csv"
   forkFeedBot (bots `genericIndex` (n-1))
+  
           
-forkFeedBot :: FeedBot -> IO ProcessHandle
-forkFeedBot bot = 
-  runCommand $ printf "runghc feedbot.hs --irc-server '%s' --port %d --channel '%s' --nick '%s' --realname '%s' --username '%s' --feed-url '%s' --feed-span %d" (ircServer bot) (ircPort bot) (ircChannel bot) user user user (feedUrl bot) (feedSpan bot)
+forkFeedBot :: FeedBot -> IO ProcessID
+forkFeedBot bot =
+  forkProcess $ executeFile "runghc" True [
+    "feedbot.hs",
+    "--irc-server", (ircServer bot),
+    "--port", (show (ircPort bot)),
+    "--channel", (ircChannel bot),
+    "--nick", user,
+    "--realname", user,
+    "--username", user,
+    "--feed-url", (feedUrl bot),
+    "--feed-span", (show (feedSpan bot))
+    ] Nothing
   where
     user = ircUser bot
-  
+
+-- terminateFeedBot :: (Integral n) => n -> IO ()
+-- terminateFeedBot n = do
+--   bots <- parseFeedBotsFromFile "bots.csv"
+--   killFeedBot (bots `genericIndex` (n-1))
+
+-- killFeedBot :: FeedBot -> IO ()
+-- killFeedBot bot
+--   runCommand
+
 main = scotty 3000 $ do
   get "/bots" $ do
     contents <- liftIO $ parseFeedBotsFromFile "bots.csv"
@@ -171,4 +192,8 @@ main = scotty 3000 $ do
   post "/bots/:id/execute" $ do
     id <- param "id"
     liftIO $ executeFeedBot (read id)
+    redirect "/bots"
+
+  post "/bots/:id/terminate" $ do
+--    liftIO $ terminateFeedBot (read id)
     redirect "/bots"
