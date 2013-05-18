@@ -2,7 +2,7 @@
 import Web.Scotty
 
 import Data.Monoid (mconcat)
-import Data.Text.Lazy (pack)
+import Data.Text.Lazy (pack, Text)
 import Control.Monad.IO.Class
 import Text.CSV
 import Data.List
@@ -78,7 +78,11 @@ convertFeedBotToHtml FeedBot {
   feedUrl=fu,
   feedSpan=fs,
   processId=pid
-  } = concat $ map (\x -> "<td>" ++ x ++ "</td>") [(show n),is,(show p),c,iu,fu,(show fs),(show pid)]
+  } = concat $ map (\x -> "<td>" ++ x ++ "</td>") [(botDetailLink n),is,(show p),c,iu,fu,(show fs),(show pid)]
+
+botDetailLink :: Integer -> String
+botDetailLink n =
+  printf "<a href='/bots/%d'>%d</a>" n n
 
 createBot :: String->Integer->String->String->String->Integer -> IO ()
 createBot server port channel user url span = do
@@ -184,6 +188,8 @@ killFeedBot bot = do
   pid <- forkProcess $ executeFile "kill" True [show (processId bot)] Nothing
   return ()
 
+show' :: (Show a) => a -> Text
+show' a = pack $ show a         
 
 main = scotty 3000 $ do
   get "/bots" $ do
@@ -199,6 +205,34 @@ main = scotty 3000 $ do
       "<table>",
       pack $ convertFeedBotsToHtml contents,
       "</table>",
+      "</body>",
+      "</html>"]
+
+  get "/bots/:id" $ do
+    id <- param "id"
+    bots <- liftIO $ parseFeedBotsFromFile "bots.csv"
+    let bot = bots `genericIndex` ((id-1) :: Integer)
+    html $ mconcat [
+      "<html>",
+      "<head>",
+      "<title>IRC Bot #", show' $ botId bot, "</title>",
+      "</head>",
+      "<body>",
+      "<h2>IRC Bot #", show' $ botId bot, "</h2>",
+      "ID: ", show' $ botId bot, "<br/>",
+      "IRC Server: ", show' $ ircServer bot, "<br/>",
+      "IRC Port: ", show' $ ircPort bot, "<br/>",
+      "IRC Channel: ", show' $ ircChannel bot, "<br/>",
+      "IRC User: ", show' $ ircUser bot, "<br/>",
+      "Feed URL: ", show' $ feedUrl bot, "<br/>",
+      "Feed Span: ", show' $ feedSpan bot, "<br/>",
+      "Process ID: ", show' $ processId bot, "<br/>",
+      "<form method='POST' action='/bots/", show' id, "/execute'>",
+      "<input type='submit' value='execute!'/>",
+      "</form>",
+      "<form method='POST' action='/bots/", show' id, "/terminate'>",
+      "<input type='submit' value='terminate!'/>",
+      "</form>",
       "</body>",
       "</html>"]
 
