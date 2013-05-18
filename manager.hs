@@ -235,7 +235,7 @@ main = scotty 3000 $ do
       "</head>",
       "<body>",
       "<h2>IRC Bots</h2>",
-      "<a href='/bots/new'>Create New bots</a>",
+      "<a href='/bots/new'>Add</a>",
       "<table>",
       pack $ convertFeedBotsToHtml contents,
       "</table>",
@@ -263,6 +263,7 @@ main = scotty 3000 $ do
       "Feed Span: ", show' $ feedSpan bot, "<br/>",
       "Process ID: ", show' $ processId bot, "<br/>",
       "<a href='/bots/", show' $ botId bot, "/edit'>edit</a><br/>",
+      "<a href='/bots'>Back</a><br/>",
       "<form method='POST' action='/bots/", show' id, "/execute'>",
       "<input type='submit' value='execute!'/>",
       "</form>",
@@ -296,6 +297,7 @@ main = scotty 3000 $ do
       "Feed URL: <input name='url' type='text' value='", pack $ feedUrl bot, "'/><br/>",
       "Feed Span: <input name='span' type='text' value='", show' $ feedSpan bot, "'/><br/>",
       "<input type='submit' value='update!'/>",
+      "<a href='/bots/", pack id, "'>Cancel</a>",
       "</form>",
       "</body>",
       "</html>"]
@@ -349,6 +351,7 @@ main = scotty 3000 $ do
       "Feed URL: <input name='url' type='text'/><br/>",
       "Span: <input name='span' type='text'/><br/>",
       "<input type='submit' value='create bot!'/><br/>",
+      "<a href='/bots'>Back</a>",
       "</form>",
       "</body>",
       "</html>"
