@@ -195,9 +195,36 @@ updateFeedBot bot = do
   removeFile "bots.csv"
   renameFile "bots-new.csv" "bots.csv"
 
+deleteFeedBot :: (Integral n) => n -> IO ()
+deleteFeedBot n = do
+  bots <- parseFeedBotsFromFile "bots.csv"
+  saveFeedBotsToFile "bots-new.csv" $ updateFeedBotsId $ dropElem bots (n-1)
+  removeFile "bots.csv"
+  renameFile "bots-new.csv" "bots.csv"  
+
+updateFeedBotsId :: [FeedBot] -> [FeedBot]
+updateFeedBotsId bots =
+  zipWith (\bot n -> FeedBot{
+              botId = n,
+              ircServer = ircServer bot,
+              ircPort = ircPort bot,
+              ircChannel = ircChannel bot,
+              ircUser = ircUser bot,
+              feedUrl = feedUrl bot,
+              feedSpan = feedSpan bot,
+              processId = processId bot
+              }
+          ) bots [1..]
+                                 
 show' :: (Show a) => a -> Text
 show' a = pack $ show a         
 
+dropElem :: (Integral n) => [a] -> n -> [a]
+dropElem [] n = []
+dropElem (_:xs) 0 = xs
+dropElem (x:xs) n = x:(dropElem xs (n-1))
+
+  
 main = scotty 3000 $ do
   get "/bots" $ do
     contents <- liftIO $ parseFeedBotsFromFile "bots.csv"
@@ -241,6 +268,9 @@ main = scotty 3000 $ do
       "</form>",
       "<form method='POST' action='/bots/", show' id, "/terminate'>",
       "<input type='submit' value='terminate!'/>",
+      "</form>",
+      "<form method='POST' action='/bots/", show' id, "/delete'>",
+      "<input type='submit' value='delete!'/>",
       "</form>",
       "</body>",
       "</html>"]
@@ -323,6 +353,11 @@ main = scotty 3000 $ do
       "</body>",
       "</html>"
       ]
+
+  post "/bots/:id/delete" $ do
+    id <- param "id"
+    liftIO $ deleteFeedBot (read id)
+    redirect "/bots"
 
   post "/bots/:id/execute" $ do
     id <- param "id"
