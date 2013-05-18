@@ -78,10 +78,30 @@ main = scotty 3000 $ do
       "</head>",
       "<body>",
       "<h2>IRC Bots</h2>",
+      "<a href='/bots/new'>Create New bots</a>",
       "<table>",
       pack $ convertFeedBotsToHtml contents,
       "</table>",
       "</body>",
       "</html>"]
 
-
+  get "/bots/new" $ do
+    html $ mconcat [
+      "<html>",
+      "<head>",
+      "<title>Create a New IRC Bot</title>",
+      "</head>",
+      "<body>",
+      "<h2>Create a New IRC Bot</h2>",
+      "<form method='POST' action='/bots'>",
+      "IRC Server: <input name='server' type='text'/><br/>",
+      "IRC Port: <input name='port' type='text'/><br/>",
+      "IRC Channel: <input name='channel' type='text'/><br/>",
+      "IRC User: <input name='user' type='text'/><br/>",
+      "Feed URL: <input name='url' type='text'/><br/>",
+      "Span: <input name='span' type='text'/><br/>",
+      "<input type='submit' value='create bot!'/><br/>",
+      "</form>",
+      "</body>",
+      "</html>"
+      ]
