@@ -6,6 +6,7 @@ import Data.Text.Lazy (pack)
 import Control.Monad.IO.Class
 import Text.CSV
 import Data.List
+import System.Directory
 
 
 data FeedBot = FeedBot {
@@ -68,6 +69,30 @@ convertFeedBotToHtml FeedBot {
   feedSpan=fs
   } = concat $ map (\x -> "<td>" ++ x ++ "</td>") [is,(show p),c,iu,fu,(show fs)]
 
+createBot :: FeedBot -> IO ()
+createBot bot = do
+  bots <- parseFeedBotsFromFile "bots.csv"
+  saveFeedBotsToFile "bots-new.csv" (bots ++ [bot])
+  removeFile "bots.csv"
+  renameFile "bots-new.csv" "bots.csv"
+
+saveFeedBotsToFile :: FilePath -> [FeedBot] -> IO ()
+saveFeedBotsToFile path bots =
+  let csv = map convertFeedBotToList bots
+      contents = printCSV csv
+    in writeFile path contents
+    
+convertFeedBotToList :: FeedBot -> [String]
+convertFeedBotToList bot =
+  [
+    ircServer bot,
+    show (ircPort bot),
+    ircChannel bot,
+    ircUser bot,
+    feedUrl bot,
+    show (feedSpan bot)
+  ]
+
 main = scotty 3000 $ do
   get "/bots" $ do
     contents <- liftIO $ parseFeedBotsFromFile "bots.csv"
@@ -84,6 +109,32 @@ main = scotty 3000 $ do
       "</table>",
       "</body>",
       "</html>"]
+
+  post "/bots" $ do
+    server <- param "server"
+    port <- param "port"
+    channel <- param "channel"
+    user <- param "user"
+    url <- param "url"
+    span <- param "span"
+    liftIO $ createBot FeedBot {
+      ircServer = server,
+      ircPort = (read port) :: Integer,
+      ircChannel = channel,
+      ircUser = user,
+      feedUrl = url,
+      feedSpan = (read span) :: Integer
+      }
+    html $ mconcat [
+      "<html>",
+      "<head>",
+      "<title>Created</title>",
+      "</head>",
+      "<body>",
+      "Created",
+      "</body>"
+      ]
+    
 
   get "/bots/new" $ do
     html $ mconcat [
