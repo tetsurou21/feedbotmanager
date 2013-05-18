@@ -188,6 +188,13 @@ killFeedBot bot = do
   pid <- forkProcess $ executeFile "kill" True [show (processId bot)] Nothing
   return ()
 
+updateFeedBot :: FeedBot -> IO ()
+updateFeedBot bot = do
+  bots <- parseFeedBotsFromFile "bots.csv"
+  saveFeedBotsToFile "bots-new.csv" $ replaceFeedBot bots (botId bot - 1) bot
+  removeFile "bots.csv"
+  renameFile "bots-new.csv" "bots.csv"
+
 show' :: (Show a) => a -> Text
 show' a = pack $ show a         
 
@@ -208,6 +215,7 @@ main = scotty 3000 $ do
       "</body>",
       "</html>"]
 
+  -- botの詳細ページ
   get "/bots/:id" $ do
     id <- param "id"
     bots <- liftIO $ parseFeedBotsFromFile "bots.csv"
@@ -220,13 +228,14 @@ main = scotty 3000 $ do
       "<body>",
       "<h2>IRC Bot #", show' $ botId bot, "</h2>",
       "ID: ", show' $ botId bot, "<br/>",
-      "IRC Server: ", show' $ ircServer bot, "<br/>",
+      "IRC Server: ", pack $ ircServer bot, "<br/>",
       "IRC Port: ", show' $ ircPort bot, "<br/>",
-      "IRC Channel: ", show' $ ircChannel bot, "<br/>",
-      "IRC User: ", show' $ ircUser bot, "<br/>",
-      "Feed URL: ", show' $ feedUrl bot, "<br/>",
+      "IRC Channel: ", pack $ ircChannel bot, "<br/>",
+      "IRC User: ", pack $ ircUser bot, "<br/>",
+      "Feed URL: ", pack $ feedUrl bot, "<br/>",
       "Feed Span: ", show' $ feedSpan bot, "<br/>",
       "Process ID: ", show' $ processId bot, "<br/>",
+      "<a href='/bots/", show' $ botId bot, "/edit'>edit</a><br/>",
       "<form method='POST' action='/bots/", show' id, "/execute'>",
       "<input type='submit' value='execute!'/>",
       "</form>",
@@ -235,6 +244,54 @@ main = scotty 3000 $ do
       "</form>",
       "</body>",
       "</html>"]
+
+  -- 編集ページ 
+  get "/bots/:id/edit" $ do
+    id <- param "id"
+    bots <- liftIO $ parseFeedBotsFromFile "bots.csv"
+    let n = (read id :: Integer) - 1
+    let bot = bots `genericIndex` n
+    html $ mconcat [
+      "<html>",
+      "<head>",
+      "<title>IRC Bot #", show' $ botId bot, "</title>",
+      "</head>",
+      "<body>",
+      "<h2>IRC Bot #", show' $ botId bot, "</h2>",
+      "<form method='POST' action='/bots/", show' $ botId bot, "/update'>",
+      "IRC Server: <input name='server' type='text' value='", pack $ ircServer bot, "'/><br/>",
+      "IRC Port: <input name='port' type='text' value='", show' $ ircPort bot, "'/><br/>",
+      "IRC Channel: <input name='channel' type='text' value='", pack $ ircChannel bot, "'/><br/>",
+      "IRC User: <input name='user' type='text' value='", pack $ ircUser bot, "'/><br/>",
+      "Feed URL: <input name='url' type='text' value='", pack $ feedUrl bot, "'/><br/>",
+      "Feed Span: <input name='span' type='text' value='", show' $ feedSpan bot, "'/><br/>",
+      "<input type='submit' value='update!'/>",
+      "</form>",
+      "</body>",
+      "</html>"]
+
+  post "/bots/:id/update" $ do
+    idStr <- param "id"
+    server <- param "server"
+    portStr <- param "port"
+    channel <- param "channel"
+    user <- param "user"
+    url <- param "url"
+    spanStr <- param "span"
+    let id = read idStr :: Integer
+    let port = read portStr :: Integer
+    let span = read spanStr :: Integer
+    liftIO $ updateFeedBot FeedBot {
+      botId = id,
+      ircServer = server,
+      ircPort = port,
+      ircChannel = channel,
+      ircUser = user,
+      feedUrl = url,
+      feedSpan = span,
+      processId = 0
+      }
+    redirect $ mconcat ["/bots/", pack idStr]
 
   post "/bots" $ do
     server <- param "server"
